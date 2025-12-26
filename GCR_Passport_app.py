@@ -27,8 +27,8 @@ DB_TO_CLEAN_MAP = {
 ALL_REGIONS = {
     "Carpex": [
         "A-Team", "Dollywood", "Wolverine", "Claymore", "FMJ", "S&M", "Oval Time", 
-        "OO5", "SNS", "Die Another Day", "Full Throttle", "BO", "MOAB", 
-        "Danger Zone", "Gran Torino", "Phoenix"
+        "OO5", "SNS", "Full Throttle", "BO", "MOAB", 
+        "Danger Zone", "Gran Torino"
     ],
     "Green Level": [
         "Alpha", "Measure Twice", "Winterfell", "Epcot", "FOD", "Whereville", 
