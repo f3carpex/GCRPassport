@@ -217,14 +217,20 @@ with tab2:
     if not df.empty:
         leaderboard = df.groupby("Name")["Beatdown"].nunique().reset_index()
         leaderboard.columns = ["Name", "Unique Stops"]
-        leaderboard["Progress"] = leaderboard["Unique Stops"] / 60
+        
+        # FIX: Multiply by 100 to get a whole number (0-100)
+        leaderboard["Progress"] = (leaderboard["Unique Stops"] / 60) * 100
+        
         leaderboard = leaderboard.sort_values("Unique Stops", ascending=False)
         
         st.dataframe(
             leaderboard,
             column_config={
                 "Progress": st.column_config.ProgressColumn(
-                    "Completion", format="%.0f%%", min_value=0, max_value=1
+                    "Completion", 
+                    format="%.0f%%",    # This now formats '15' as '15%'
+                    min_value=0, 
+                    max_value=100       # Changed max from 1 to 100
                 )
             },
             use_container_width=True,
