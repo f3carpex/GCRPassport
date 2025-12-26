@@ -167,7 +167,7 @@ cols = st.columns(len(ALL_REGIONS) + 1)
 cols[0].metric("🏆 Tour Champions", f"{len(tour_finishers)} Pax")
 # 2. Individual Region Metrics
 for i, (region, names_list) in enumerate(region_finishers.items()):
-    cols[i+1].metric(f"{region} Finishers", f"{len(names_list)} Pax")
+    cols[i+1].metric(f"Completed {region}", f"{len(names_list)} Pax")
 
 # --- TABS ---
 # Added "Hall of Fame" as the last tab
