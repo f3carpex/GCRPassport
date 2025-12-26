@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 
 # --- CONFIGURATION ---
 # Replace with your actual Google Sheet export link
-GSHEET_URL = "https://docs.google.com/spreadsheets/d/1FnHMVgluyCBep93B0X2Hi2tb_dU2O1L1wBbXzLXteO8/edit?usp=sharing"
+GSHEET_URL = "https://docs.google.com/spreadsheets/d/1FnHMVgluyCBep93B0X2Hi2tb_dU2O1L1wBbXzLXteO8/export?format=csv"
 
 # Connect to SQL (Carpex Database)
 conn = st.connection("my_db", type="sql")
