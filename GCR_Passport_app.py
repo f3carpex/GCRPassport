@@ -164,7 +164,7 @@ if not df.empty:
 # --- METRICS ROW ---
 cols = st.columns(len(ALL_REGIONS) + 1)
 # 1. Full Tour Metrics
-cols[0].metric("🏆 Tour Champions", f"{len(tour_finishers)} Pax")
+cols[0].metric("🏆 Passport Complete!", f"{len(tour_finishers)} Pax")
 # 2. Individual Region Metrics
 for i, (region, names_list) in enumerate(region_finishers.items()):
     cols[i+1].metric(f"Completed {region}", f"{len(names_list)} Pax")
