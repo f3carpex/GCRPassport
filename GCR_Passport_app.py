@@ -55,7 +55,7 @@ def load_and_merge_data():
             'Carpex' as Region
         FROM attendance_view
         WHERE Date >= '2026-01-01' 
-        AND region_name = 'Carpex'
+        AND Region = 'Carpex'
         """
         df_sql = conn.query(query)
         df_sql['Date'] = pd.to_datetime(df_sql['Date'])
