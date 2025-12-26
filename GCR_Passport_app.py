@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 
 # --- CONFIGURATION ---
 # Replace with your actual Google Sheet export link
-GSHEET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdz_XCPdDYWNnGAgit-0P_Em7JPtoAdN8cngBqYshgz4wwr9A/viewform?usp=dialog"
+GSHEET_URL = "https://docs.google.com/spreadsheets/d/1FnHMVgluyCBep93B0X2Hi2tb_dU2O1L1wBbXzLXteO8/edit?usp=sharing"
 
 # Connect to SQL (Carpex Database)
 conn = st.connection("my_db", type="sql")
@@ -55,7 +55,6 @@ def load_and_merge_data():
             'Carpex' as Region
         FROM attendance_view
         WHERE Date >= '2026-01-01' 
-        AND Region = 'Carpex'
         """
         df_sql = conn.query(query)
         df_sql['Date'] = pd.to_datetime(df_sql['Date'])
