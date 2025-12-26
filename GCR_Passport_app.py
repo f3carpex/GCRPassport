@@ -1,124 +1,105 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from sqlalchemy import create_engine, text
 
-st.set_page_config(page_title="GCR Tour Tracker", page_icon="💪", layout="wide")
+# --- CONFIGURATION ---
+# Replace with your actual Google Sheet export link
+GSHEET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdz_XCPdDYWNnGAgit-0P_Em7JPtoAdN8cngBqYshgz4wwr9A/viewform?usp=dialog"
 
-# --- 1. SETUP CONNECTION ---
-# This looks for the [connections.my_db] section in your secrets.toml
+# Connect to SQL (Carpex Database)
 conn = st.connection("my_db", type="sql")
 
-st.title("🏆 Greater Carpex Region Tour 2026")
-
-# --- 2. LOAD DATA (CACHE IT) ---
-# We use st.cache_data so we don't hammer your DB with a query every time a user clicks a button.
-# ttl=300 means "refresh data every 5 minutes"
 @st.cache_data(ttl=300)
-def get_tour_data():
-    # QUERY 1: RAW LOGS (For Heatmap & Recent Activity)
-    # Replace 'attendance_table' with your actual table name
-    query_logs = """
-    SELECT 
-        date_attended,
-        pax_name,
-        beatdown_name,
-        region_name
-    FROM attendance_table
-    WHERE date_attended >= '2026-01-01'
-    """
-    df_logs = conn.query(query_logs)
+def load_and_merge_data():
+    # ---------------------------------------------------------
+    # PART 1: GOOGLE SHEET (Non-Carpex Regions)
+    # ---------------------------------------------------------
+    try:
+        df_sheet = pd.read_csv(GSHEET_URL)
+        
+        # 1. Identify the 'Beatdown' columns from the different form sections
+        # Update these strings to match the EXACT headers in your Google Sheet
+        col_gl = "Beatdown (Green Level)" 
+        col_pc = "Beatdown (Peak City)"
+        col_sc = "Beatdown (South Cary)"
+        
+        # 2. Coalesce them into one 'Beatdown' column
+        # This logic says: "Take Green Level; if empty, take Peak City; if empty, take South Cary"
+        df_sheet['Beatdown'] = df_sheet[col_gl].fillna(df_sheet[col_pc]).fillna(df_sheet[col_sc])
+        
+        # 3. Clean up the rest of the columns
+        df_sheet = df_sheet.rename(columns={
+            "Pax Name": "Name",          # Update to match your form header
+            "Region": "Region",          # Update to match your form header
+            "Date": "Date"               # Update to match your form header
+        })
+        
+        # 4. Filter for only the columns we need
+        df_sheet = df_sheet[["Date", "Name", "Beatdown", "Region"]]
+        df_sheet['Date'] = pd.to_datetime(df_sheet['Date'])
+        
+    except Exception as e:
+        st.warning(f"Google Sheet Error: {e}")
+        df_sheet = pd.DataFrame(columns=["Date", "Name", "Beatdown", "Region"])
+
+    # ---------------------------------------------------------
+    # PART 2: SQL DATABASE (Carpex Region)
+    # ---------------------------------------------------------
+    try:
+        # We only pull Carpex data from here
+        query = """
+        SELECT 
+            Date as Date,
+            PAX as Name,
+            AO as Beatdown,
+            'Carpex' as Region
+        FROM attendance_view
+        WHERE date_attended >= '2026-01-01' 
+        AND region_name = 'Carpex'
+        """
+        df_sql = conn.query(query)
+        df_sql['Date'] = pd.to_datetime(df_sql['Date'])
+        
+    except Exception as e:
+        st.warning("SQL Connection Error. Showing only Google Sheet data.")
+        df_sql = pd.DataFrame(columns=["Date", "Name", "Beatdown", "Region"])
+
+    # ---------------------------------------------------------
+    # PART 3: MERGE
+    # ---------------------------------------------------------
+    df_master = pd.concat([df_sql, df_sheet], ignore_index=True)
     
-    # QUERY 2: LEADERBOARD
-    # Doing the heavy lifting in SQL is faster than Pandas for large datasets
-    query_leaderboard = """
-    SELECT 
-        pax_name, 
-        COUNT(DISTINCT beatdown_name) as unique_stops
-    FROM attendance_table
-    WHERE date_attended >= '2026-01-01'
-    GROUP BY pax_name
-    ORDER BY unique_stops DESC
-    """
-    df_leaderboard = conn.query(query_leaderboard)
-    
-    return df_logs, df_leaderboard
+    return df_master
 
 # Load the data
-try:
-    df_logs, df_leaderboard = get_tour_data()
-except Exception as e:
-    st.error("Error connecting to database. Check your secrets.toml settings.")
-    st.stop()
+df = load_and_merge_data()
 
-# --- 3. DASHBOARD METRICS ---
+st.title("🏆 GCR Tour Tracker (Hybrid)")
+
+# --- METRICS ---
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Posts (2026)", len(df_logs))
-col2.metric("Active Pax", df_logs['pax_name'].nunique())
-col3.metric("Stops Visited", df_logs['beatdown_name'].nunique())
+col1.metric("Total Posts", len(df))
+col2.metric("Pax Participating", df["Name"].nunique())
+col3.metric("Tour Stops Cleared", df["Beatdown"].nunique())
 
-# --- 4. TABS & VISUALIZATIONS ---
-tab1, tab2 = st.tabs(["📊 Leaderboard", "🔥 Heatmap"])
+# --- LEADERBOARD TAB ---
+st.subheader("Leaderboard")
 
-with tab1:
-    st.subheader("Tour Standings")
+if not df.empty:
+    # Group by Name
+    leaderboard = df.groupby("Name")["Beatdown"].nunique().reset_index()
+    leaderboard.columns = ["Name", "Unique Stops"]
+    leaderboard["Progress"] = leaderboard["Unique Stops"] / 60
     
-    # Calculate Percentage (Assuming 60 total stops)
-    df_leaderboard['Progress'] = df_leaderboard['unique_stops'] / 60
+    leaderboard = leaderboard.sort_values("Unique Stops", ascending=False)
     
     st.dataframe(
-        df_leaderboard,
+        leaderboard,
         column_config={
-            "pax_name": "Pax Name",
-            "unique_stops": "Unique Stops",
             "Progress": st.column_config.ProgressColumn(
-                "Tour Completion",
-                format="%.0f%%",
-                min_value=0,
-                max_value=1
+                "Completion", format="%.0f%%", min_value=0, max_value=1
             )
         },
-        hide_index=True,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
-
-with tab2:
-    st.subheader("Beatdown Activity Heatmap")
-    
-    # Group data for the Heatmap: Region -> Beatdown -> Count
-    heatmap_data = df_logs.groupby(['region_name', 'beatdown_name']).size().reset_index(name='attendance_count')
-    
-    # A Tree Map is perfect for this "Region > Beatdown" hierarchy
-    fig = px.treemap(
-        heatmap_data,
-        path=[px.Constant("Greater Carpex"), 'region_name', 'beatdown_name'],
-        values='attendance_count',
-        color='region_name', # Different color for each region
-        title="Size of box = Total Attendance",
-        hover_data=['attendance_count']
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.divider()
-    
-    # The "Ratio" / Day of Week Heatmap (If you have Day of Week data)
-    # If your SQL date column is actually a date object, we can extract the day name
-    if not df_logs.empty:
-        df_logs['day_of_week'] = pd.to_datetime(df_logs['date_attended']).dt.day_name()
-        
-        day_heatmap = df_logs.groupby(['day_of_week', 'region_name']).size().reset_index(name='posts')
-        
-        # Sort days correctly
-        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        
-        fig2 = px.density_heatmap(
-            day_heatmap,
-            x='day_of_week',
-            y='region_name',
-            z='posts',
-            text_auto=True,
-            title="Attendance Density by Day",
-            category_orders={"day_of_week": day_order}
-        )
-        st.plotly_chart(fig2, use_container_width=True)
