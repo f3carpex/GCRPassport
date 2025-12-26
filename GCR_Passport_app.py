@@ -138,29 +138,40 @@ df = load_and_merge_data()
 
 st.title("🏆 GCR Tour Tracker")
 
-# --- CUSTOM METRICS: REGION CLEARS ---
-# Calculate how many people have finished each region
+# --- CALCULATE FINISHERS ---
+# We need to calculate this before drawing the tabs so we can use the data in multiple places
+region_finishers = {region: [] for region in ALL_REGIONS}
+tour_finishers = []
+
 if not df.empty:
+    # Get a set of visited beatdowns for every single person
     pax_groups = df.groupby("Name")["Beatdown"].apply(set)
     
-    clears = {region: 0 for region in ALL_REGIONS}
-    
     for pax, visited_set in pax_groups.items():
+        regions_done_count = 0
+        
+        # Check specific regions
         for region, required_list in ALL_REGIONS.items():
             required_set = set(required_list)
-            # Check if required is a subset of visited
             if required_set.issubset(visited_set):
-                clears[region] += 1
-    
-    # Display Metrics
-    cols = st.columns(4)
-    for i, (region, count) in enumerate(clears.items()):
-        cols[i].metric(f"{region} Finisher", f"{count} Pax")
-else:
-    st.warning("No data found.")
+                region_finishers[region].append(pax)
+                regions_done_count += 1
+        
+        # Check if they finished ALL regions (The Full Tour)
+        if regions_done_count == len(ALL_REGIONS):
+            tour_finishers.append(pax)
+
+# --- METRICS ROW ---
+cols = st.columns(len(ALL_REGIONS) + 1)
+# 1. Full Tour Metrics
+cols[0].metric("🏆 Tour Champions", f"{len(tour_finishers)} Pax")
+# 2. Individual Region Metrics
+for i, (region, names_list) in enumerate(region_finishers.items()):
+    cols[i+1].metric(f"{region} Finishers", f"{len(names_list)} Pax")
 
 # --- TABS ---
-tab1, tab2, tab3 = st.tabs(["👤 My Progress", "📊 Leaderboard", "🔥 Heatmap"])
+# Added "Hall of Fame" as the last tab
+tab1, tab2, tab3, tab4 = st.tabs(["👤 My Progress", "📊 Leaderboard", "🔥 Heatmap", "🏅 Hall of Fame"])
 
 # --- TAB 1: INDIVIDUAL PROGRESS ---
 with tab1:
@@ -237,3 +248,42 @@ with tab3:
             hover_data=['Attendance']
         )
         st.plotly_chart(fig_tree, use_container_width=True)
+
+# --- TAB 4: HALL OF FAME ---
+with tab4:
+    st.header("🏅 Hall of Fame")
+    st.markdown("These Pax have completed every stop in the specific region.")
+    
+    # Section 1: The Grand Champions (Full Tour)
+    st.subheader(f"🏆 GCR Tour Finishers ({len(tour_finishers)})")
+    if tour_finishers:
+        st.success(", ".join(tour_finishers))
+    else:
+        st.info("No one has completed the full tour yet. Will you be the first?")
+    
+    st.divider()
+    
+    # Section 2: Regional Finishers
+    # Display in 2 columns for better layout
+    col_a, col_b = st.columns(2)
+    
+    # Loop through regions and display them
+    region_items = list(region_finishers.items())
+    
+    # Left Column
+    with col_a:
+        for region, names in region_items[:2]: # First 2 regions
+            st.markdown(f"### {region} ({len(names)})")
+            if names:
+                st.write(", ".join(names))
+            else:
+                st.caption("No finishers yet.")
+                
+    # Right Column
+    with col_b:
+        for region, names in region_items[2:]: # Last 2 regions
+            st.markdown(f"### {region} ({len(names)})")
+            if names:
+                st.write(", ".join(names))
+            else:
+                st.caption("No finishers yet.")
