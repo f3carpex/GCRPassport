@@ -2,28 +2,11 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-# --- NAME NORMALIZATION MAP ---
-# Left Side = Your Database Name
-# Right Side = The "Clean" Name (Must match ALL_REGIONS exactly)
-DB_TO_CLEAN_MAP = {
-    "ao-mon-ateam": "A-Team",
-    "ao-mon-dollywood": "Dollywood",
-    "ao-mon-wolverine": "Wolverine",
-    "ao-tues-claymore": "Claymore",
-    "ao-tues-fmj": "FMJ",
-    "ao-tues-smoke-n-mirrors": "S&M",
-    "ao-tues-ovaltime": "Oval Time",
-    "ao-wed-005": "OO5",             # Database uses Zeros, Clean list uses Letter Os
-    "ao-wed-sns": "SNS",
-    "ao-wed-full-throttle": "Full Throttle",
-    "ao-thurs-bo": "BO",
-    "ao-thurs-moab": "MOAB",
-    "ao-fri-dangerzone": "Danger Zone",
-    "ao-fri-gt": "Gran Torino"
-}
+# --- CONFIGURATION ---
+# 1. Google Sheet Link (Export Format)
+GSHEET_URL = "https://docs.google.com/spreadsheets/d/1FnHMVgluyCBep93B0X2Hi2tb_dU2O1L1wBbXzLXteO8/export?format=csv"
 
-# --- MASTER LIST OF ALL STOPS ---
-# This is the "Passport" checklist
+# 2. Master List of Requirements (The "Clean" Names)
 ALL_REGIONS = {
     "Carpex": [
         "A-Team", "Dollywood", "Wolverine", "Claymore", "FMJ", "S&M", "Oval Time", 
@@ -48,11 +31,26 @@ ALL_REGIONS = {
     ]
 }
 
-# --- CONFIGURATION ---
-# Replace with your actual Google Sheet export link
-GSHEET_URL = "https://docs.google.com/spreadsheets/d/1FnHMVgluyCBep93B0X2Hi2tb_dU2O1L1wBbXzLXteO8/export?format=csv"
+# 3. Translation Map (Database Name -> Clean Name)
+DB_TO_CLEAN_MAP = {
+    "ao-mon-ateam": "A-Team",
+    "ao-mon-dollywood": "Dollywood",
+    "ao-mon-wolverine": "Wolverine",
+    "ao-tues-claymore": "Claymore",
+    "ao-tues-fmj": "FMJ",
+    "ao-tues-smoke-n-mirrors": "S&M",
+    "ao-tues-ovaltime": "Oval Time",
+    "ao-wed-005": "OO5",
+    "ao-wed-sns": "SNS",
+    "ao-wed-full-throttle": "Full Throttle",
+    "ao-thurs-bo": "BO",
+    "ao-thurs-moab": "MOAB",
+    "ao-fri-dangerzone": "Danger Zone",
+    "ao-fri-gt": "Gran Torino"
+    # Note: "Phoenix" and "Die Another Day" are assumed to match. If not, add them here.
+}
 
-# Connect to SQL (Carpex Database)
+# Connect to SQL
 conn = st.connection("my_db", type="sql")
 
 @st.cache_data(ttl=300)
@@ -63,51 +61,49 @@ def load_and_merge_data():
     try:
         df_sheet = pd.read_csv(GSHEET_URL)
         
-        # 1. Identify the 'Beatdown' columns from the different form sections
-        # Update these strings to match the EXACT headers in your Google Sheet
+        # Columns from your Form Sections
         col_gl = "Beatdown (Green Level)" 
         col_pc = "Beatdown (Peak City)"
         col_sc = "Beatdown (South Cary)"
         
-        # 2. Coalesce them into one 'Beatdown' column
-        # This logic says: "Take Green Level; if empty, take Peak City; if empty, take South Cary"
+        # Coalesce
         df_sheet['Beatdown'] = df_sheet[col_gl].fillna(df_sheet[col_pc]).fillna(df_sheet[col_sc])
         
-        # 3. Clean up the rest of the columns
+        # Rename
         df_sheet = df_sheet.rename(columns={
-            "Pax Name": "Name",          # Update to match your form header
-            "Region": "Region",          # Update to match your form header
-            "Date": "Date"               # Update to match your form header
+            "Pax Name": "Name",          
+            "Region": "Region",          
+            "Date": "Date"               
         })
         
-        # 4. Filter for only the columns we need
+        # Filter
         df_sheet = df_sheet[["Date", "Name", "Beatdown", "Region"]]
         df_sheet['Date'] = pd.to_datetime(df_sheet['Date'])
         
     except Exception as e:
-        st.warning(f"Google Sheet Error: {e}")
+        st.error(f"Google Sheet Error: {e}")
         df_sheet = pd.DataFrame(columns=["Date", "Name", "Beatdown", "Region"])
 
     # ---------------------------------------------------------
     # PART 2: SQL DATABASE (Carpex Region)
     # ---------------------------------------------------------
     try:
-        # 1. Define the specific list of Carpex AOs that count
-        # (Make sure these match the spelling in your database exactly!)
-        valid_carpex_aos = [
+        # RAW NAMES list for the SQL Query
+        valid_carpex_aos_raw = [
             "ao-mon-ateam", "ao-mon-dollywood", "ao-mon-wolverine", 
             "ao-tues-claymore", "ao-tues-fmj", "ao-tues-smoke-n-mirrors", "ao-tues-ovaltime", 
             "ao-wed-005", "ao-wed-sns", "ao-wed-full-throttle", 
             "ao-thurs-bo", "ao-thurs-moab", 
-            "ao-fri-dangerzone", "ao-fri-gt"
+            "ao-fri-dangerzone", "ao-fri-gt", 
+            "Die Another Day", "Phoenix" # Assuming these match raw DB names
         ]
         
-        # 2. Format the list for SQL (Turns it into: "'A-Team', 'Dollywood', ...")
-        # We use a Python trick to join them with quotes
-        aos_sql_string = "', '".join(valid_carpex_aos)
+        # Format for SQL IN clause
+        aos_sql_string = "', '".join(valid_carpex_aos_raw)
         aos_sql_string = f"('{aos_sql_string}')"
 
-        # 3. The Query
+        # Query
+        # Changed date to 2025-01-01 so you can see data NOW. Change to 2026 later.
         query = f"""
         SELECT 
             Date as Date,
@@ -118,13 +114,12 @@ def load_and_merge_data():
         WHERE Date >= '2025-01-01' 
         AND AO IN {aos_sql_string} 
         """
-        # ^ The "IN" clause filters out any AO not in your list
         
         df_sql = conn.query(query)
         df_sql['Date'] = pd.to_datetime(df_sql['Date'])
         
     except Exception as e:
-        st.error(f"Here is the exact error: {e}")
+        st.error(f"SQL Error: {e}")
         st.stop()
         df_sql = pd.DataFrame(columns=["Date", "Name", "Beatdown", "Region"])
 
@@ -133,31 +128,36 @@ def load_and_merge_data():
     # ---------------------------------------------------------
     df_master = pd.concat([df_sql, df_sheet], ignore_index=True)
     
-    # 1. Apply the translation map
-    # This replaces the messy DB names with the clean ones defined above
+    # Apply the Name Translation Map
     df_master["Beatdown"] = df_master["Beatdown"].replace(DB_TO_CLEAN_MAP)
     
-    # 2. OPTIONAL: Debugging Helper
-    # This will print any names from the DB that don't match your Master List.
-    # Check your Streamlit app "Logs" to see these.
-    all_valid_stops = [item for sublist in ALL_REGIONS.values() for item in sublist]
-    unknown_stops = df_master[~df_master["Beatdown"].isin(all_valid_stops)]["Beatdown"].unique()
-    
-    if len(unknown_stops) > 0:
-        print("⚠️ Warning: These DB names need to be added to your Map:", unknown_stops)
-
     return df_master
 
-# Load the data
+# Load Data
 df = load_and_merge_data()
 
-st.title("🏆 GCR Tour Tracker (Hybrid)")
+st.title("🏆 GCR Tour Tracker")
 
-# --- METRICS ---
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Posts", len(df))
-col2.metric("Pax Participating", df["Name"].nunique())
-col3.metric("Tour Stops Cleared", df["Beatdown"].nunique())
+# --- CUSTOM METRICS: REGION CLEARS ---
+# Calculate how many people have finished each region
+if not df.empty:
+    pax_groups = df.groupby("Name")["Beatdown"].apply(set)
+    
+    clears = {region: 0 for region in ALL_REGIONS}
+    
+    for pax, visited_set in pax_groups.items():
+        for region, required_list in ALL_REGIONS.items():
+            required_set = set(required_list)
+            # Check if required is a subset of visited
+            if required_set.issubset(visited_set):
+                clears[region] += 1
+    
+    # Display Metrics
+    cols = st.columns(4)
+    for i, (region, count) in enumerate(clears.items()):
+        cols[i].metric(f"{region} Finisher", f"{count} Pax")
+else:
+    st.warning("No data found.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["👤 My Progress", "📊 Leaderboard", "🔥 Heatmap"])
@@ -165,58 +165,44 @@ tab1, tab2, tab3 = st.tabs(["👤 My Progress", "📊 Leaderboard", "🔥 Heatma
 # --- TAB 1: INDIVIDUAL PROGRESS ---
 with tab1:
     st.subheader("Pax Passport Check")
-    
-    # Get unique list of names for the dropdown
-    all_names = sorted(df["Name"].unique().tolist())
-    
-    # 1. Select Pax
-    selected_pax = st.selectbox("Find your name:", all_names)
-    
-    if selected_pax:
-        # Filter data for this person
-        pax_data = df[df["Name"] == selected_pax]
+    if not df.empty:
+        all_names = sorted(df["Name"].unique().tolist())
+        selected_pax = st.selectbox("Find your name:", all_names)
         
-        # Get set of beatdowns they have done
-        completed_set = set(pax_data["Beatdown"].unique())
-        
-        # Calculate Stats
-        total_stops = sum(len(v) for v in ALL_REGIONS.values())
-        my_count = len(completed_set)
-        progress = my_count / total_stops
-        
-        # Display Progress Bar
-        st.progress(progress, text=f"{my_count} of {total_stops} Stops Completed ({progress:.0%})")
-        
-        # Display Checklist by Region
-        col1, col2 = st.columns(2)
-        
-        # Iterate through regions to show what is done/missing
-        # We split the 4 regions into two columns for layout
-        regions_list = list(ALL_REGIONS.items())
-        
-        # Left Column (First 2 regions)
-        with col1:
-            for region, beatdowns in regions_list[:2]:
-                with st.expander(f"**{region}**", expanded=True):
-                    for bd in beatdowns:
-                        if bd in completed_set:
-                            st.write(f"✅ ~~{bd}~~") # Strikethrough for done
-                        else:
-                            st.write(f"⬜ {bd}") # Empty box for to-do
+        if selected_pax:
+            pax_data = df[df["Name"] == selected_pax]
+            completed_set = set(pax_data["Beatdown"].unique())
+            
+            total_stops = sum(len(v) for v in ALL_REGIONS.values())
+            my_count = len(completed_set)
+            progress = my_count / total_stops
+            
+            st.progress(progress, text=f"{my_count} of {total_stops} Stops Completed ({progress:.0%})")
+            
+            col1, col2 = st.columns(2)
+            regions_list = list(ALL_REGIONS.items())
+            
+            with col1:
+                for region, beatdowns in regions_list[:2]:
+                    with st.expander(f"**{region}**", expanded=True):
+                        for bd in beatdowns:
+                            if bd in completed_set:
+                                st.write(f"✅ ~~{bd}~~")
+                            else:
+                                st.write(f"⬜ {bd}")
 
-        # Right Column (Last 2 regions)
-        with col2:
-            for region, beatdowns in regions_list[2:]:
-                with st.expander(f"**{region}**", expanded=True):
-                    for bd in beatdowns:
-                        if bd in completed_set:
-                            st.write(f"✅ ~~{bd}~~")
-                        else:
-                            st.write(f"⬜ {bd}")
+            with col2:
+                for region, beatdowns in regions_list[2:]:
+                    with st.expander(f"**{region}**", expanded=True):
+                        for bd in beatdowns:
+                            if bd in completed_set:
+                                st.write(f"✅ ~~{bd}~~")
+                            else:
+                                st.write(f"⬜ {bd}")
 
 # --- TAB 2: LEADERBOARD ---
 with tab2:
-    # (Your existing Leaderboard code goes here)
+    st.subheader("Overall Standings")
     if not df.empty:
         leaderboard = df.groupby("Name")["Beatdown"].nunique().reset_index()
         leaderboard.columns = ["Name", "Unique Stops"]
@@ -237,12 +223,9 @@ with tab2:
 # --- TAB 3: HEATMAP ---
 with tab3:
     st.subheader("🔥 Beatdown Activity")
-    
     if not df.empty:
         import plotly.express as px
         
-        # --- CHART 1: TREEMAP (Region > Beatdown Popularity) ---
-        # Group by Region and Beatdown to get the count
         heatmap_data = df.groupby(['Region', 'Beatdown']).size().reset_index(name='Attendance')
         
         fig_tree = px.treemap(
@@ -254,30 +237,3 @@ with tab3:
             hover_data=['Attendance']
         )
         st.plotly_chart(fig_tree, use_container_width=True)
-        
-        st.divider()
-        
-        # --- CHART 2: DAY OF WEEK GRID ---
-        # Extract Day Name from the Date column
-        df['Day'] = df['Date'].dt.day_name()
-        
-        # Group by Day and Region
-        day_counts = df.groupby(['Day', 'Region']).size().reset_index(name='Posts')
-        
-        # Sort Days correctly (Mon -> Sun) instead of Alphabetical
-        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        
-        fig_grid = px.density_heatmap(
-            day_counts,
-            x='Day',
-            y='Region',
-            z='Posts',
-            title="Attendance Intensity by Day",
-            text_auto=True,
-            color_continuous_scale="Viridis",
-            category_orders={"Day": day_order}
-        )
-        st.plotly_chart(fig_grid, use_container_width=True)
-
-    else:
-        st.info("No data available yet to generate heatmaps.")
