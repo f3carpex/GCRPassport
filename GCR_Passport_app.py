@@ -255,7 +255,7 @@ with tab4:
     st.markdown("These Pax have completed every stop in the specific region.")
     
     # Section 1: The Grand Champions (Full Tour)
-    st.subheader(f"🏆 GCR Tour Finishers ({len(tour_finishers)})")
+    st.subheader(f"🏆 GCR Passport Finishers ({len(tour_finishers)})")
     if tour_finishers:
         st.success(", ".join(tour_finishers))
     else:
