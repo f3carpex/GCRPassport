@@ -46,8 +46,23 @@ def load_and_merge_data():
     # PART 2: SQL DATABASE (Carpex Region)
     # ---------------------------------------------------------
     try:
-        # We only pull Carpex data from here
-        query = """
+        # 1. Define the specific list of Carpex AOs that count
+        # (Make sure these match the spelling in your database exactly!)
+        valid_carpex_aos = [
+            "ao-mon-ateam", "ao-mon-dollywood", "ao-mon-wolverine", 
+            "ao-tues-claymore", "ao-tues-fmj", "ao-tues-smoke-n-mirrors", "ao-tues-ovaltime", 
+            "ao-wed-005", "ao-wed-sns", "ao-wed-full-throttle", 
+            "ao-thurs-bo", "ao-thurs-moab", 
+            "ao-fri-dangerzone", "ao-fri-gt"
+        ]
+        
+        # 2. Format the list for SQL (Turns it into: "'A-Team', 'Dollywood', ...")
+        # We use a Python trick to join them with quotes
+        aos_sql_string = "', '".join(valid_carpex_aos)
+        aos_sql_string = f"('{aos_sql_string}')"
+
+        # 3. The Query
+        query = f"""
         SELECT 
             Date as Date,
             PAX as Name,
@@ -55,13 +70,16 @@ def load_and_merge_data():
             'Carpex' as Region
         FROM attendance_view
         WHERE Date >= '2025-01-01' 
+        AND AO IN {aos_sql_string} 
         """
+        # ^ The "IN" clause filters out any AO not in your list
+        
         df_sql = conn.query(query)
         df_sql['Date'] = pd.to_datetime(df_sql['Date'])
         
     except Exception as e:
-        st.error(f"Here is the exact error: {e}") # <--- This will tell us what is wrong
-        st.stop() # Stops the app here so you can read it
+        st.error(f"Here is the exact error: {e}")
+        st.stop()
         df_sql = pd.DataFrame(columns=["Date", "Name", "Beatdown", "Region"])
 
     # ---------------------------------------------------------
