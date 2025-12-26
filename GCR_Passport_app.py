@@ -61,7 +61,8 @@ def load_and_merge_data():
         df_sql['Date'] = pd.to_datetime(df_sql['Date'])
         
     except Exception as e:
-        st.warning("SQL Connection Error. Showing only Google Sheet data.")
+        st.error(f"Here is the exact error: {e}") # <--- This will tell us what is wrong
+        st.stop() # Stops the app here so you can read it
         df_sql = pd.DataFrame(columns=["Date", "Name", "Beatdown", "Region"])
 
     # ---------------------------------------------------------
