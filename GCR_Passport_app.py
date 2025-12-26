@@ -54,7 +54,7 @@ def load_and_merge_data():
             AO as Beatdown,
             'Carpex' as Region
         FROM attendance_view
-        WHERE Date >= '2026-01-01' 
+        WHERE Date >= '2025-01-01' 
         """
         df_sql = conn.query(query)
         df_sql['Date'] = pd.to_datetime(df_sql['Date'])
