@@ -54,7 +54,7 @@ def load_and_merge_data():
             AO as Beatdown,
             'Carpex' as Region
         FROM attendance_view
-        WHERE date_attended >= '2026-01-01' 
+        WHERE Date >= '2026-01-01' 
         AND region_name = 'Carpex'
         """
         df_sql = conn.query(query)
