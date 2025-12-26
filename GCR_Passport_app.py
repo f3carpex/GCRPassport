@@ -136,7 +136,7 @@ def load_and_merge_data():
 # Load Data
 df = load_and_merge_data()
 
-st.title("🏆 GCR Tour Tracker")
+st.title("🏆 GCR Passport Stamp Tracker")
 
 # --- CALCULATE FINISHERS ---
 # We need to calculate this before drawing the tabs so we can use the data in multiple places
